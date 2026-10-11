@@ -33,8 +33,11 @@ class Settings:
     # адрес API и умеет разбирать reasoning_content (размышления модели) — их мы
     # показываем пользователю как «ход мысли».
     llm_model: str
-    # Тариф для подсчёта цены прогона, ₽ за миллион токенов (вход / выход).
+    # Тариф для подсчёта цены прогона, ₽ за миллион токенов: вход / вход из кэша / выход.
+    # DeepSeek кэширует повторяющееся начало запроса (инструкция + схемы инструментов)
+    # и берёт за такие токены в разы меньше — это заметная часть каждого запроса.
     price_in_rub: float
+    price_cached_rub: float
     price_out_rub: float
     # Предохранитель: сколько запросов к LLM разрешено за один ответ (RunConfig.max_llm_calls).
     max_llm_calls: int
@@ -108,6 +111,7 @@ def get_settings() -> Settings:
         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
         llm_model=os.getenv("LLM_MODEL", "deepseek/deepseek-flash"),
         price_in_rub=float(os.getenv("PRICE_IN_RUB", "30")),
+        price_cached_rub=float(os.getenv("PRICE_CACHED_RUB", "3")),
         price_out_rub=float(os.getenv("PRICE_OUT_RUB", "120")),
         max_llm_calls=int(os.getenv("MAX_LLM_CALLS", "12")),
         max_concurrent_runs=int(os.getenv("MAX_CONCURRENT_RUNS", "8")),
