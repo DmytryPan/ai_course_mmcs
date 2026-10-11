@@ -3,6 +3,11 @@
 .env.*
 !.env.example
 
+# Данные, которые сервис создаёт сам: сессии, пользователи, индекс Qdrant,
+# журналы прогонов, секрет JWT. Коммитится только кэш LLM-описаний мест.
+ai_course_agents/data/*
+!ai_course_agents/data/enrichment.json
+
 # Python и окружения uv
 .venv/
 __pycache__/
