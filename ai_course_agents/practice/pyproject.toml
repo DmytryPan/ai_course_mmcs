@@ -1,0 +1,17 @@
+[project]
+name = "week2-practice"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "ipykernel>=7.4.0",
+    "openai>=3",
+    "openai-agents>=0.22",
+    "pydantic>=2",
+    "python-dotenv>=1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "nbclient>=0.11.0",
+    "nbformat>=5.11.1",
+]

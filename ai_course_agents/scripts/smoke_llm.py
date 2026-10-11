@@ -46,12 +46,23 @@ async def main(mock: bool) -> None:
     config = RunConfig(streaming_mode=StreamingMode.SSE, max_llm_calls=3)
 
     print(f"модель: {settings.llm_model}{' (mock)' if mock else ''}")
+    stream = None   # что сейчас печатаем потоком: "thought" или "text"
     async for event in runner.run_async(user_id="dev", session_id=session.id,
                                         new_message=question, run_config=config):
         for part in (event.content.parts if event.content else []):
-            if part.text:
-                kind = "💭 мысль" if part.thought else ("… кусок" if event.partial else "✅ ответ")
-                print(f"{kind}: {part.text!r}")
+            if not part.text:
+                continue
+            if event.partial:
+                # Кусок потока (partial=True): печатаем в одну строку, без переноса.
+                # part.thought=True — это размышления модели (reasoning_content DeepSeek).
+                kind = "thought" if part.thought else "text"
+                if kind != stream:
+                    print("\n💭 мысли: " if kind == "thought" else "\n… ответ потоком: ", end="")
+                    stream = kind
+                print(part.text, end="", flush=True)
+            elif not part.thought:
+                # Итоговое (не partial) событие повторяет весь текст целиком — его сохраняет сессия.
+                print(f"\n✅ итоговый ответ: {part.text!r}")
         if event.usage_metadata and not event.partial:
             u = event.usage_metadata
             print(f"токены: вход {u.prompt_token_count}, выход {u.candidates_token_count}")

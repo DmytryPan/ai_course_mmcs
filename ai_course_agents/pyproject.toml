@@ -11,10 +11,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "fastembed>=0.9.0",
     "google-adk>=2.9.2",
-    "ipykernel>=7.4.0",
-    "litellm>=1.83.0",
-    "openai>=3.17.0",
-    "openai-agents>=0.22",
+    "litellm>=1.84",
     "pydantic>=2",
     "pyjwt>=2.15.1",
     "python-dotenv>=1.2.3",
@@ -31,8 +28,6 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "nbclient>=0.11.0",
-    "nbformat>=5.11.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
