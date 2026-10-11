@@ -1,0 +1,21 @@
+# Секреты: ключи API живут только локально
+.env
+.env.*
+!.env.example
+
+# Python и окружения uv
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Редакторы и ОС
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
