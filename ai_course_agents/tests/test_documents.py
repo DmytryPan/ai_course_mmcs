@@ -1,6 +1,6 @@
 """Тесты словаря кухонь и текстов-описаний для семантического поиска."""
 
-from ai_course_agents.search.cuisine import cuisine_words
+from ai_course_agents.search.cuisine import cuisine_short, cuisine_words
 from ai_course_agents.search.documents import describe
 
 
@@ -8,6 +8,11 @@ def test_cuisine_tags_become_russian_dishes():
     # Несколько тегов через «;», регистр и пробелы не мешают
     words = cuisine_words(" Russian; pizza ")
     assert "пельмени" in words and "пицца" in words
+
+
+def test_cuisine_short_for_answers():
+    assert cuisine_short("japanese;russian;pizza") == "японская кухня, русская кухня, пицца"
+    assert cuisine_short("sushi;japanese") == "суши, японская кухня"
 
 
 def test_unknown_cuisine_tag_is_kept_readable():

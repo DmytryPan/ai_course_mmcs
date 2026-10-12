@@ -12,6 +12,11 @@ from typing import Any
 
 from google.adk.events import Event
 
+# Служебные реплики, которыми stream.py закрывает прерванный ответ в истории сессии.
+# В истории для интерфейса они превращаются в статус сообщения (плашка), а не в текст ответа.
+STOPPED_NOTE = "[Ответ остановлен пользователем.]"
+ERROR_NOTE = "[Ответ прерван из-за ошибки.]"
+
 # Человеческие названия инструментов для «Хода мысли» в интерфейсе.
 TOOL_TITLES = {
     "search_places": "Поиск мест по фильтрам",
@@ -80,7 +85,7 @@ def build_history(events: list[Event]) -> list[dict[str, Any]]:
             continue
         if current is None or current["invocation_id"] != event.invocation_id:
             current = {"role": "assistant", "invocation_id": event.invocation_id, "text": "",
-                       "thoughts": "", "steps": [], "places": []}
+                       "thoughts": "", "steps": [], "places": [], "status": "done"}
             messages.append(current)
         for p in parts:
             if p.function_call:
@@ -98,6 +103,8 @@ def build_history(events: list[Event]) -> list[dict[str, Any]]:
                     current["places"] = info["places"]       # на карте — результат последнего шага
             elif p.text and p.thought:
                 current["thoughts"] += p.text
+            elif p.text in (STOPPED_NOTE, ERROR_NOTE):       # служебная отметка о прерывании
+                current["status"] = "stopped" if p.text == STOPPED_NOTE else "error"
             elif p.text:
                 current["text"] = p.text                     # итоговый текст ответа (не partial)
     return messages

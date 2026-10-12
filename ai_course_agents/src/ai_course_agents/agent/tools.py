@@ -33,6 +33,7 @@ from google.adk.tools import ToolContext   # «контекст вызова»: 
 from ai_course_agents.config import get_settings
 from ai_course_agents.poi.kinds import FOOD_KINDS, KIND_LABELS, KindName
 from ai_course_agents.poi.repo import PoiRepo, distance_m
+from ai_course_agents.search.cuisine import cuisine_short
 from ai_course_agents.search.vector import SemanticIndex
 
 log = logging.getLogger(__name__)    # логгер с именем модуля: ai_course_agents.agent.tools
@@ -128,7 +129,9 @@ def _place(row: dict[str, Any]) -> dict[str, Any]:
         "kind": KIND_LABELS.get(row.get("kind", ""), row.get("kind")),   # вид по-русски, понятнее модели
         "address": address or None,
         "hours": row.get("opening_hours"),                        # строка OSM: «Mo-Fr 09:00-21:00»
-        "cuisine": row.get("cuisine"),
+        # Кухня по-русски («японская кухня, пицца»), а не тегами OSM «japanese;pizza»:
+        # модель переписывает поле в ответ как есть, и пользователь видел бы латиницу.
+        "cuisine": cuisine_short(row.get("cuisine")),
         "distance_m": row.get("distance_m"),                      # есть только у nearest / rank_by_distance
         "lat": round(row["lat"], 5),                              # 5 знаков ≈ 1 м: точнее не нужно,
         "lon": round(row["lon"], 5),                              # а лишние цифры — лишние токены

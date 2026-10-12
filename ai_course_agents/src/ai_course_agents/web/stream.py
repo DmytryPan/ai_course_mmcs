@@ -46,7 +46,7 @@ from ai_course_agents.agent.agent import APP_NAME
 from ai_course_agents.agent.usage import Usage
 from ai_course_agents.web.chats import DEFAULT_TITLE, get_owned_chat
 from ai_course_agents.web.deps import Services, current_user, get_services
-from ai_course_agents.web.events import TOOL_TITLES, summarize_tool_result
+from ai_course_agents.web.events import ERROR_NOTE, STOPPED_NOTE, TOOL_TITLES, summarize_tool_result
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chats", tags=["stream"])
@@ -247,8 +247,7 @@ async def run_agent(services: Services, user: dict, chat: dict,
             # «доделать эти шаги, даже если задачу уже отменяют».
             with anyio.CancelScope(shield=True):
                 if record["status"] in ("cancelled", "error") and invocation_id:
-                    note = ("[Ответ остановлен пользователем.]" if record["status"] == "cancelled"
-                            else "[Ответ прерван из-за ошибки.]")
+                    note = STOPPED_NOTE if record["status"] == "cancelled" else ERROR_NOTE
                     await close_interrupted_turn(services, user_id, chat_id, invocation_id, note)
                 await services.db.update_chat(chat_id, user_id)     # чат поднимается наверх списка
                 record["usage"] = usage.as_dict(s)

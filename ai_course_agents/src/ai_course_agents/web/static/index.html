@@ -4,10 +4,74 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Гид по Ростову</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+  <!-- Библиотеки с CDN, версии зафиксированы (сборки у фронтенда нет):
+       Leaflet — карта; marked — markdown ответа в HTML; DOMPurify — очистка этого HTML
+       (ответ модели — внешние данные, без очистки он мог бы содержать опасный <script>). -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+  <!-- type="module" — код разбит на ES-модули (api.js, map.js, render.js), браузер грузит их сам -->
+  <script type="module" src="/static/app.js"></script>
 </head>
 <body>
-  <!-- Заглушка этапа 3: интерфейс появится на этапе 4. API — /docs -->
-  <h1>Гид по Ростову</h1>
-  <p>Бэкенд работает. Интерфейс — на этапе 4. Описание API: <a href="/docs">/docs</a>.</p>
+
+  <!-- ── Экран входа ───────────────────────────────────────────────────── -->
+  <section class="auth" id="auth" hidden>
+    <form class="auth-card" id="auth-form" novalidate>
+      <div class="auth-logo">🧭</div>
+      <h1>Гид по Ростову</h1>
+      <p class="lead">Кафе, аптеки, магазины и ещё 8&nbsp;тысяч мест — спросите своими словами.</p>
+      <div class="tabs" role="tablist">
+        <button type="button" class="active" data-mode="login">Вход</button>
+        <button type="button" data-mode="register">Регистрация</button>
+      </div>
+      <label class="field"><span>Логин</span>
+        <input name="username" autocomplete="username" required minlength="3" maxlength="32"></label>
+      <label class="field"><span>Пароль</span>
+        <input name="password" type="password" autocomplete="current-password" required minlength="6" maxlength="72"></label>
+      <div class="form-error" id="auth-error" role="alert"></div>
+      <button class="btn btn-primary" id="auth-submit" type="submit">Войти</button>
+    </form>
+  </section>
+
+  <!-- ── Приложение ────────────────────────────────────────────────────── -->
+  <div class="app" id="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head"><span class="logo">🧭</span> Гид по Ростову</div>
+      <button class="btn new-chat" id="new-chat">＋ Новый чат</button>
+      <ul class="chat-list" id="chat-list"></ul>
+      <div class="sidebar-foot">
+        <span>👤</span><span class="who" id="who"></span>
+        <button class="btn btn-ghost" id="logout" title="Выйти">Выйти</button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <main class="chat">
+      <header class="chat-head">
+        <button class="icon-btn only-mobile" id="open-sidebar" aria-label="Чаты">☰</button>
+        <h2 id="chat-title">Новый чат</h2>
+        <button class="btn only-mobile" id="open-map">🗺 Карта</button>
+      </header>
+      <div class="messages" id="messages"><div class="messages-inner" id="messages-inner"></div></div>
+      <form class="composer" id="composer">
+        <div class="composer-box">
+          <textarea id="input" rows="1" maxlength="1000"
+                    placeholder="Например: где поесть пельменей рядом с Пушкинской?"></textarea>
+          <button class="btn btn-primary" id="send" type="submit">Отправить</button>
+        </div>
+        <div class="hint">Enter — отправить, Shift+Enter — новая строка. Данные — OpenStreetMap, могут быть неполными.</div>
+      </form>
+    </main>
+
+    <section class="map-panel" id="map-panel">
+      <div id="map"></div>
+      <div class="map-caption" id="map-caption">Найденные места появятся на карте</div>
+      <button class="btn map-close" id="close-map">✕ Закрыть</button>
+    </section>
+  </div>
 </body>
 </html>

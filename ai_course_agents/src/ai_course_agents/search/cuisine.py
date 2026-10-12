@@ -78,6 +78,20 @@ CUISINE_RU: dict[str, str] = {
 }
 
 
+def cuisine_short(cuisine: str | None) -> str | None:
+    """Короткое русское название кухни для ответа пользователю (без списка блюд).
+
+    «japanese;russian;asian» → «японская кухня, русская кухня, азиатская кухня»,
+    «pizza» → «пицца». Из словарной строки берём часть до двоеточия и первой запятой:
+    блюда нужны поиску, а в ответе человеку хватит названия кухни.
+    """
+    if not cuisine:
+        return None
+    tags = [t.strip().lower() for t in cuisine.split(";") if t.strip()]
+    names = [CUISINE_RU.get(t, t.replace("_", " ")).split(":")[0].split(",")[0].strip() for t in tags]
+    return ", ".join(dict.fromkeys(names))     # dict.fromkeys — убрать повторы, сохранив порядок
+
+
 def cuisine_words(cuisine: str | None) -> str | None:
     """Тег(и) кухни из базы → русские слова. «pizza;italian» → «пицца, пиццерия; итальянская …».
 

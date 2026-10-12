@@ -1,0 +1,222 @@
+/* «Гид по Ростову» — стили интерфейса.
+   Цвета заданы переменными (токенами) в :root и переопределены для тёмной темы:
+   компоненты используют только var(--…), поэтому тема меняется в одном месте. */
+
+:root {
+  --bg: #f6f5f2;            /* фон страницы */
+  --panel: #ffffff;         /* карточки, панели */
+  --panel-2: #f0eee9;       /* вторичный фон: боковая панель, поле ввода */
+  --border: #e3e0d9;
+  --text: #1d1d1b;
+  --muted: #6b6a66;         /* второстепенный текст: время, подписи */
+  --accent: #0f766e;        /* основной цвет: кнопки, ссылки, метки на карте */
+  --accent-soft: #e2f1ef;
+  --accent-text: #ffffff;
+  --user-bubble: #0f766e;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --warn-soft: #fff4dc;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 16px rgba(0, 0, 0, .05);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+
+/* Тёмная карта из обычных плиток OSM: инверсия цветов с поворотом оттенка возвращает
+   «правильные» цвета воды и парков, а тёмный фон получается сам. Метки не затрагиваются —
+   фильтр только на слое плиток. */
+@media (prefers-color-scheme: dark) {
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141615;
+    --panel: #1c1f1e;
+    --panel-2: #222624;
+    --border: #2f3432;
+    --text: #e9ebea;
+    --muted: #9aa19e;
+    --accent: #2dd4bf;
+    --accent-soft: #163a36;
+    --accent-text: #08201d;
+    --user-bubble: #13534d;
+    --danger: #f97066;
+    --danger-soft: #3a1d1b;
+    --warn-soft: #3a3020;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+
+/* ── кнопки ──────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+  border: 1px solid var(--border); background: var(--panel); border-radius: 10px;
+  padding: 8px 14px; transition: background .15s, border-color .15s;
+}
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { background: transparent; border-color: transparent; }
+.btn-ghost:hover { background: var(--panel-2); border-color: transparent; }
+.btn-danger { color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: default; }
+.icon-btn { border: 0; background: transparent; padding: 6px; border-radius: 8px; color: var(--muted); line-height: 0; }
+.icon-btn:hover { background: var(--panel-2); color: var(--text); }
+
+/* ── экран входа ─────────────────────────────────────────────────────────── */
+.auth { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.auth-card { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 18px; padding: 28px; box-shadow: var(--shadow); }
+.auth-logo { font-size: 34px; }
+.auth h1 { margin: 6px 0 4px; font-size: 22px; }
+.auth p.lead { margin: 0 0 20px; color: var(--muted); }
+.tabs { display: flex; background: var(--panel-2); border-radius: 10px; padding: 3px; margin-bottom: 16px; }
+.tabs button { flex: 1; border: 0; background: transparent; padding: 7px; border-radius: 8px; color: var(--muted); }
+.tabs button.active { background: var(--panel); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+.field { display: block; margin-bottom: 12px; }
+.field span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.field input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.form-error { color: var(--danger); font-size: 14px; min-height: 20px; margin: 4px 0 8px; }
+.auth .btn-primary { width: 100%; padding: 11px; }
+
+/* ── каркас приложения: панель чатов | чат | карта ──────────────────────── */
+.app { height: 100%; display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 40%); }
+
+.sidebar { background: var(--panel-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.sidebar-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; font-weight: 700; }
+.sidebar-head .logo { font-size: 20px; }
+.new-chat { margin: 0 12px 10px; }
+.chat-list { flex: 1; overflow-y: auto; padding: 0 8px; list-style: none; margin: 0; }
+.chat-item { display: flex; align-items: center; gap: 4px; border-radius: 10px; padding: 8px 8px 8px 10px; cursor: pointer; }
+.chat-item:hover { background: var(--panel); }
+.chat-item.active { background: var(--panel); box-shadow: var(--shadow); }
+.chat-item .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.chat-item .time { font-size: 12px; color: var(--muted); }
+.chat-item .actions { display: none; }
+.chat-item:hover .actions, .chat-item.active .actions { display: flex; }
+.chat-item .time { display: block; }
+.chat-item:hover .time { display: none; }
+.chat-item input { width: 100%; padding: 2px 6px; border: 1px solid var(--accent); border-radius: 6px; background: var(--panel); }
+.empty-list { color: var(--muted); font-size: 14px; padding: 8px 12px; }
+.sidebar-foot { border-top: 1px solid var(--border); padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.sidebar-foot .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── чат ─────────────────────────────────────────────────────────────────── */
+.chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); min-height: 52px; }
+.chat-head h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.only-mobile { display: none; }
+.messages { flex: 1; overflow-y: auto; padding: 20px 16px 8px; }
+.messages-inner { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+.msg-user { align-self: flex-end; max-width: 80%; background: var(--user-bubble); color: #fff;
+  padding: 10px 14px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.msg-bot { align-self: stretch; }
+.answer { overflow-wrap: anywhere; }
+.answer > :first-child { margin-top: 0; }
+.answer > :last-child { margin-bottom: 0; }
+.answer p { margin: 0 0 10px; }
+.answer ul, .answer ol { margin: 0 0 10px; padding-left: 22px; }
+.answer li { margin: 3px 0; }
+.answer strong.place-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.answer a { color: var(--accent); }
+.cursor::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; margin-left: 1px; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* «Ход мысли»: шаги агента и размышления модели */
+.trace { border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius); margin-bottom: 10px; }
+.trace > summary { list-style: none; cursor: pointer; padding: 9px 12px; display: flex; align-items: center; gap: 8px;
+  font-size: 14px; color: var(--muted); user-select: none; }
+.trace > summary::-webkit-details-marker { display: none; }
+.trace > summary .chev { margin-left: auto; transition: transform .2s; }
+.trace[open] > summary .chev { transform: rotate(180deg); }
+.trace-body { padding: 0 12px 10px; }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--accent-soft); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { list-style: none; margin: 0; padding: 0; }
+.step { display: grid; grid-template-columns: 22px 1fr auto; gap: 2px 8px; padding: 6px 0; border-top: 1px dashed var(--border); font-size: 14px; }
+.step:first-child { border-top: 0; }
+.step .ico { grid-row: span 2; text-align: center; }
+.step .name { font-weight: 600; }
+.step .args { color: var(--muted); font-weight: 400; }
+.step .ms { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.step .result { grid-column: 2 / 4; color: var(--muted); }
+.step.error .result { color: var(--danger); }
+.thoughts-toggle { border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 4px 0; text-decoration: underline dotted; }
+.thoughts { font-size: 13px; color: var(--muted); white-space: pre-wrap; max-height: 180px; overflow-y: auto;
+  background: var(--panel-2); border-radius: 8px; padding: 8px 10px; margin-top: 6px; font-style: italic; }
+.thoughts.live { max-height: 96px; }
+
+.meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 8px; align-items: center; }
+.meta .badge { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 1px 8px; }
+.meta button { border: 0; background: transparent; color: var(--accent); font-size: 12px; padding: 0; }
+.notice { border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: 6px; display: flex; gap: 10px; align-items: center; }
+.notice.error { background: var(--danger-soft); color: var(--danger); }
+.notice.info { background: var(--warn-soft); }
+.notice .btn { padding: 4px 10px; font-size: 13px; }
+
+/* пустой чат: приветствие и подсказки */
+.welcome { max-width: 620px; margin: 8vh auto 0; text-align: center; }
+.welcome .logo { font-size: 44px; }
+.welcome h2 { margin: 6px 0; font-size: 24px; }
+.welcome p { color: var(--muted); margin: 0 0 22px; }
+.chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
+.chip { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 12px 14px; text-align: left; }
+.chip:hover { border-color: var(--accent); }
+.chip b { display: block; font-size: 14px; }
+.chip span { font-size: 13px; color: var(--muted); }
+
+/* поле ввода */
+.composer { padding: 10px 16px 16px; }
+.composer-box { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 16px; padding: 8px 8px 8px 14px; box-shadow: var(--shadow); }
+.composer-box:focus-within { border-color: var(--accent); }
+.composer textarea { flex: 1; border: 0; outline: 0; resize: none; background: transparent; max-height: 160px; padding: 6px 0; }
+.composer .btn { border-radius: 12px; }
+.composer .hint { max-width: 760px; margin: 6px auto 0; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* ── карта ───────────────────────────────────────────────────────────────── */
+.map-panel { position: relative; border-left: 1px solid var(--border); min-height: 0; }
+#map { position: absolute; inset: 0; background: var(--panel-2); }
+.map-caption { position: absolute; z-index: 500; left: 12px; top: 12px; right: 12px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 13px; box-shadow: var(--shadow);
+  pointer-events: none; }
+.map-close { position: absolute; z-index: 600; right: 12px; top: 12px; display: none; }
+.pin { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent);
+  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); display: grid; place-items: center; }
+.pin span { transform: rotate(45deg); color: #fff; font-size: 12px; font-weight: 700; }
+.pin.active { background: #e8590c; transform: rotate(-45deg) scale(1.2); }
+.pin-origin { font-size: 24px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+.leaflet-popup-content { font: 14px/1.4 var(--font); margin: 10px 12px; }
+.leaflet-popup-content b { display: block; margin-bottom: 2px; }
+.leaflet-popup-content .muted { color: #6b6a66; font-size: 13px; }
+
+/* ── узкие экраны: панель чатов — выдвижная, карта — во весь экран по кнопке ── */
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .only-mobile { display: inline-flex; }
+  .sidebar { position: fixed; inset: 0 auto 0 0; width: 82%; max-width: 300px; z-index: 1000;
+    transform: translateX(-105%); transition: transform .2s; box-shadow: var(--shadow); }
+  .sidebar.open { transform: none; }
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 999; }
+  .map-panel { position: fixed; inset: 0; z-index: 900; display: none; border: 0; }
+  .map-panel.open { display: block; }
+  .map-close { display: inline-flex; }
+  .map-caption { right: 120px; }        /* место под кнопку «Закрыть» */
+  .chips { grid-template-columns: minmax(0, 1fr); }
+  .messages { padding: 14px 12px 6px; }
+  .composer { padding: 8px 12px 12px; }
+  .msg-user { max-width: 90%; }
+}
