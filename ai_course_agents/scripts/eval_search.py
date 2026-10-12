@@ -9,7 +9,11 @@
 подходящими: по словам в названии (хинкал, пицц…) или по тегу кухни из базы. Правила
 не зависят от модели и от догадок LLM — это «линейка», одинаковая для всех вариантов.
   • P@5   — доля подходящих среди первых 5 результатов (главная метрика: что увидит человек);
-  • hit@1 — подходящий ли самый первый результат.
+  • hit@1 — подходящий ли самый первый результат;
+  • P@5+LLM — как P@5, но подходящим считается и место, у которого правило совпало
+    с ДОГАДКОЙ LLM о меню («Осака» → «суши, роллы»). Строгая P@5 такие места не видит
+    и занижает пользу обогащения; P@5+LLM опирается на непроверенные догадки и может
+    её завышать. Честная картина — обе цифры рядом.
 Оговорка: правило видит только то, что явно есть в названии или теге. Если поиск нашёл
 настоящую пельменную с названием «Сказка», правило её не засчитает — P@5 занижен
 одинаково для всех вариантов, сравнивать их это не мешает.
@@ -70,12 +74,19 @@ def relevant(hit: dict, rule: tuple[str, set[str], set[str]]) -> bool:
     return bool(re.search(pattern, name)) or bool(tags & place_tags) or hit["kind"] in kinds
 
 
+def relevant_with_guess(hit: dict, rule: tuple[str, set[str], set[str]]) -> bool:
+    """Подходит по фактам — или правило совпало с догадкой LLM в тексте описания."""
+    guess = hit.get("text", "").lower().partition("предположительно:")[2]
+    return relevant(hit, rule) or bool(guess and re.search(rule[0], guess))
+
+
 def evaluate(index: SemanticIndex, mode: str) -> dict:
-    p5, h1, examples = [], [], {}
+    p5, p5g, h1, examples = [], [], [], {}
     for query, rule in QUERIES.items():
         hits = index.search_sync(query, kinds=FOOD_KINDS, limit=5, mode=mode)
         marks = [relevant(h, rule) for h in hits]
         p5.append(sum(marks) / 5)
+        p5g.append(sum(relevant_with_guess(h, rule) for h in hits) / 5)
         h1.append(marks[0] if marks else False)
         examples[query] = [(h["name"], h["score"], ok) for h, ok in zip(hits, marks)]
     # Задержка без кэша: каждый раз сбрасываем кэш векторов запросов
@@ -87,7 +98,7 @@ def evaluate(index: SemanticIndex, mode: str) -> dict:
             index.search_sync(query, kinds=FOOD_KINDS, limit=5, mode=mode)
             lat.append((time.perf_counter() - t) * 1000)
     lat.sort()
-    return {"P@5": statistics.mean(p5), "hit@1": statistics.mean(h1),
+    return {"P@5": statistics.mean(p5), "P@5+LLM": statistics.mean(p5g), "hit@1": statistics.mean(h1),
             "p50_ms": lat[len(lat) // 2], "p95_ms": lat[int(len(lat) * 0.95) - 1],
             "examples": examples}
 
@@ -119,9 +130,9 @@ def main() -> None:
                 for q, ex in r["examples"].items():
                     print(f"  {q}: " + " | ".join(f"{'✓' if ok else '·'}{n}" for n, s, ok in ex))
 
-    print(f"\n{'модель [режим]':<53}{'загрузка, с':>12}{'индекс, с':>11}{'P@5':>7}{'hit@1':>7}{'p50, мс':>9}{'p95, мс':>9}")
+    print(f"\n{'модель [режим]':<53}{'загрузка, с':>12}{'индекс, с':>11}{'P@5':>7}{'P@5+LLM':>9}{'hit@1':>7}{'p50, мс':>9}{'p95, мс':>9}")
     for name, load_s, build_s, r in rows:
-        print(f"{name:<53}{load_s:>12.1f}{build_s:>11.1f}{r['P@5']:>7.2f}{r['hit@1']:>7.2f}"
+        print(f"{name:<53}{load_s:>12.1f}{build_s:>11.1f}{r['P@5']:>7.2f}{r['P@5+LLM']:>9.2f}{r['hit@1']:>7.2f}"
               f"{r['p50_ms']:>9.1f}{r['p95_ms']:>9.1f}")
 
 

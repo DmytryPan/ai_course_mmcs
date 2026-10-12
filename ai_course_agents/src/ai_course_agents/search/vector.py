@@ -179,7 +179,14 @@ class SemanticIndex:
     def _lexical(self, query: str, kinds: list[str] | None, lat: float | None, lon: float | None,
                  radius_m: int | None) -> list[dict[str, Any]]:
         """Лексические кандидаты: места, в описании которых есть основы слов запроса.
-        Порядок: больше совпавших основ — выше; при равенстве — совпадение в названии выше."""
+
+        Совпадения взвешиваются по надёжности источника: в фактах (название, кухня из базы) —
+        вес 2, только в догадке LLM («предположительно: …») — вес 1. Так подтверждённая
+        «Пельмешка» стоит выше «Самовара», про который пельмени лишь предположены, но и
+        «Самовар» в выдаче остаётся. Без этого обогащение подняло находки по догадкам выше
+        фактов: строгая P@5 упала с 0.92 до 0.82 (scripts/eval_search.py, docs/PLAN.md).
+        При равном весе выше то место, где слово запроса есть прямо в названии.
+        """
         stems = query_stems(query)
         if not stems:
             return []
@@ -190,14 +197,15 @@ class SemanticIndex:
         for d in self._load_docs():
             if kinds and d["kind"] not in kinds:
                 continue
-            if lat is not None and lon is not None and radius_m \
-                    and distance_m(lat, lon, d["lat"], d["lon"]) > radius_m:
+            if lat is not None and lon is not None and radius_m                     and distance_m(lat, lon, d["lat"], d["lon"]) > radius_m:
                 continue
-            hits = sum(1 for p in patterns if p.search(d["_text"]))
-            if hits:
+            # partition делит текст на «до» и «после» пометки догадки (если её нет — guess пуст)
+            facts, _, guess = d["_text"].partition("предположительно:")
+            weight = sum(2 if p.search(facts) else 1 if p.search(guess) else 0 for p in patterns)
+            if weight:
                 in_name = any(p.search((d.get("name") or "").lower()) for p in patterns)
-                found.append((hits, in_name, d))
-        found.sort(key=lambda x: (-x[0], not x[1]))       # по убыванию совпадений, затем «в названии»
+                found.append((weight, in_name, d))
+        found.sort(key=lambda x: (-x[0], not x[1]))       # по убыванию веса, затем «в названии»
         return [d for _, _, d in found[:DENSE_TOP]]
 
     def search_sync(self, query: str, *, kinds: Iterable[str] | None = None,
