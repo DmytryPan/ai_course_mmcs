@@ -52,6 +52,11 @@ class Settings:
     # Сколько прогонов агента могут одновременно ждать LLM на весь процесс (этап 3, семафор).
     max_concurrent_runs: int
 
+    # ── Семантический поиск ───────────────────────────────────────────────
+    # Модель эмбеддингов fastembed (ONNX, работает на CPU). Выбрана по оценке
+    # scripts/eval_search.py: качество (precision@5) и скорость на CPU.
+    embed_model: str
+
     # ── Данные ─────────────────────────────────────────────────────────────
     poi_db: Path          # база мест Ростова (только чтение)
     data_dir: Path        # всё, что сервис создаёт сам: сессии, пользователи, индекс, журналы
@@ -79,6 +84,12 @@ class Settings:
     def qdrant_dir(self) -> Path:
         """Векторная БД Qdrant в embedded-режиме: просто папка на диске."""
         return self.data_dir / "qdrant"
+
+    @property
+    def models_dir(self) -> Path:
+        """Скачанные модели эмбеддингов. По умолчанию fastembed кладёт их во временную
+        папку ОС, которую Windows может почистить, — тогда модель качалась бы заново."""
+        return self.data_dir / "models"
 
     @property
     def runs_dir(self) -> Path:
@@ -133,6 +144,7 @@ def get_settings() -> Settings:
         price_out_rub=float(os.getenv("PRICE_OUT_RUB", "120")),
         max_llm_calls=int(os.getenv("MAX_LLM_CALLS", "12")),
         max_concurrent_runs=int(os.getenv("MAX_CONCURRENT_RUNS", "8")),
+        embed_model=os.getenv("EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"),
         poi_db=Path(os.getenv("POI_DB", REPO_ROOT / "week2" / "practice" / "poi.sqlite")).resolve(),
         data_dir=data_dir,
         jwt_secret=_jwt_secret(data_dir),

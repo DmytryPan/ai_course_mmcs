@@ -224,6 +224,20 @@ class PoiRepo:
         marks = ",".join("?" * len(ids))
         return await self._rows(f"SELECT {LIST_COLUMNS} FROM poi WHERE id IN ({marks})", ids)
 
+    async def named_places(self, kinds: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
+        """Все места с названием или брендом (для построения поискового индекса и обогащения).
+
+        Безымянные места (~2 тыс. площадок, банкоматов и т.п.) в семантический индекс
+        не идут: по смыслу их искать не по чему, а «Детская площадка» ×900 только засорит выдачу.
+        kinds — ограничить видами (например, только общепит).
+        """
+        sql = f"SELECT {LIST_COLUMNS} FROM poi WHERE (name IS NOT NULL OR brand IS NOT NULL)"
+        params: list[Any] = []
+        if kinds:
+            sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+            params += list(kinds)
+        return await self._rows(sql + " ORDER BY id", params)
+
     async def details(self, place_id: int) -> dict[str, Any] | None:
         """Полная карточка места по id или None, если такого id нет."""
         return await self._one(f"SELECT {CARD_COLUMNS} FROM poi WHERE id = ?", (place_id,))

@@ -31,8 +31,9 @@ from typing import Any, Awaitable, Callable, Optional
 from google.adk.tools import ToolContext   # «контекст вызова»: доступ к состоянию сессии и др.
 
 from ai_course_agents.config import get_settings
-from ai_course_agents.poi.kinds import KIND_LABELS, KindName
+from ai_course_agents.poi.kinds import FOOD_KINDS, KIND_LABELS, KindName
 from ai_course_agents.poi.repo import PoiRepo, distance_m
+from ai_course_agents.search.vector import SemanticIndex
 
 log = logging.getLogger(__name__)    # логгер с именем модуля: ai_course_agents.agent.tools
 
@@ -56,6 +57,25 @@ def set_repo(repo: PoiRepo) -> None:
     """Подменить репозиторий (например, на тестовую базу)."""
     global _repo
     _repo = repo
+
+
+# Семантический индекс — тоже один на процесс и тоже лениво: загрузка модели эмбеддингов
+# занимает секунды и сотни мегабайт памяти, делать это при импорте модуля незачем.
+_index: SemanticIndex | None = None
+
+
+def get_index() -> SemanticIndex:
+    global _index
+    if _index is None:
+        s = get_settings()
+        _index = SemanticIndex(s.embed_model, s.qdrant_dir, s.models_dir)
+    return _index
+
+
+def set_index(index: SemanticIndex) -> None:
+    """Подменить индекс (веб-слой создаёт его при старте; тесты — свой)."""
+    global _index
+    _index = index
 
 
 # ── общие помощники ─────────────────────────────────────────────────────────
@@ -329,7 +349,53 @@ async def place_details(place_id: int) -> dict:
     return card
 
 
+@observed_errors
+async def semantic_search(query: str, food_only: bool = True,
+                          lat: Optional[float] = None, lon: Optional[float] = None,
+                          radius_m: Optional[int] = None, limit: int = 8,
+                          tool_context: ToolContext = None) -> dict:
+    """Поиск мест ПО СМЫСЛУ описания, когда точного признака нет: блюдо, напиток,
+    атмосфера, обрывок забытого названия.
+
+    Зови, когда пользователь описывает, что хочет, своими словами: «где поесть пельменей»,
+    «хинкали», «шаурма», «попить пива», «торты», «забыл название — что-то с рыбой».
+    Можно ограничить районом: передай lat/lon точки (из geocode_address) и radius_m.
+    НЕ зови для точных признаков — вида, сети, улицы, круглосуточности (для этого
+    search_places), для подсчёта (count_places) и для «ближайшая аптека» (nearest_places).
+
+    Возвращает {"places": [{id, name, kind, address, hours, cuisine, match, score,
+    distance_m?, lat, lon}]} от самых подходящих к менее подходящим. match — как место
+    нашлось: «по словам и смыслу» (самое надёжное), «по словам» (слово запроса есть
+    в названии или кухне), «по смыслу» (только смысловая близость — может быть случайной,
+    особенно в конце списка). score — смысловое сходство 0–1 (нет у найденных только по словам).
+    Поиск опирается на название, тег кухни и предположения о меню — в ответе
+    пользователю говори «судя по названию / описанию», а не утверждай, что блюдо точно есть.
+
+    Args:
+        query: что ищем, коротко, по-русски: «пельмени», «грузинская кухня», «кофе с собой».
+        food_only: True — искать только среди кафе, ресторанов, баров, фастфуда, пекарен;
+            False — среди всех мест города (магазины, услуги и т.п.).
+        lat: широта центра района поиска, если пользователь назвал место.
+        lon: долгота центра района поиска.
+        radius_m: радиус района в метрах, например 1000; без lat/lon не действует.
+        limit: сколько мест вернуть, 1–20, по умолчанию 8.
+    """
+    hits = await get_index().search(query, kinds=FOOD_KINDS if food_only else None,
+                                    lat=lat, lon=lon, radius_m=radius_m, limit=_clamp(limit))
+    places = []
+    for h in hits:
+        if lat is not None and lon is not None:          # точка задана — посчитаем расстояние
+            h["distance_m"] = distance_m(lat, lon, h["lat"], h["lon"])
+        item = _place(h)                                  # payload Qdrant — те же поля, что строка базы
+        item["match"] = h["match"]                        # как нашлось: модели важно понимать уверенность
+        if h.get("score") is not None:
+            item["score"] = h["score"]                    # смысловое сходство, если место пришло из векторов
+        places.append(item)
+    _remember(tool_context, places)
+    return {"places": places}
+
+
 # Набор инструментов агента: его передаёт в LlmAgent(tools=...) файл agent.py.
-# ADK обернёт каждую функцию в FunctionTool. semantic_search добавится на этапе 2.
+# ADK обернёт каждую функцию в FunctionTool.
 TOOLS = [search_places, count_places, top_brands, geocode_address,
-         nearest_places, rank_by_distance, place_details]
+         nearest_places, rank_by_distance, place_details, semantic_search]
