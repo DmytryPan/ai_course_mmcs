@@ -38,10 +38,14 @@ uv sync                          # install dependencies from uv.lock
 uv add <pkg>                     # add a dependency (updates pyproject.toml and uv.lock)
 uv run ai-course-agents          # entry point = ai_course_agents:main
 uv run python scripts/smoke_llm.py [--mock]   # ADK → LiteLLM → DeepSeek check (--mock = no network)
-uv run python -m <module>
+uv run python -m ai_course_agents.agent "вопрос"           # console agent run (stage 1)
+uv run python -m ai_course_agents.search.index             # build the Qdrant index (with the server stopped)
+uv run python scripts/eval_search.py                       # search quality and speed by model
+uv run python scripts/api_demo.py                          # end-to-end HTTP/SSE scenario (server must be running)
+uv run pytest -q                                           # tests; run a single one: uv run pytest tests/test_repo.py -k geocode
 ```
 
-No tests or linter are configured yet.
+Embedded Qdrant (`data/qdrant`) can be opened by only one process at a time. Building the index and `tests/test_search.py` need a stopped server. In Git Bash, curl corrupts Cyrillic in `-d`; use httpx or a file in UTF-8.
 
 ## Environment
 

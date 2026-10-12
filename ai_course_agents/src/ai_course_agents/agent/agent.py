@@ -14,6 +14,7 @@ from google.adk.agents import LlmAgent                         # агент ADK 
 from google.adk.agents.readonly_context import ReadonlyContext  # то, что ADK передаёт в провайдер инструкции
 from google.adk.models.lite_llm import LiteLlm                 # адаптер ADK → LiteLLM → любой провайдер
 
+from ai_course_agents.agent.callbacks import guardrail, trim_history
 from ai_course_agents.agent.tools import LAST_PLACES_KEY, TOOLS
 from ai_course_agents.config import Settings, get_settings
 from ai_course_agents.poi.kinds import kinds_cheatsheet
@@ -100,8 +101,13 @@ def build_instruction(ctx: ReadonlyContext) -> str:
 def build_model(settings: Settings) -> LiteLlm:
     """Модель через LiteLLM. Строка «deepseek/…» — провайдер DeepSeek в LiteLLM: он знает
     адрес API и переводит reasoning_content (размышления) в Part(thought=True) для ADK."""
-    # Всё, кроме model, ADK передаёт в litellm.acompletion как есть — здесь только ключ.
-    return LiteLlm(model=settings.llm_model, api_key=settings.deepseek_api_key)
+    # Всё, кроме model, ADK передаёт в litellm.acompletion как есть.
+    # num_retries — LiteLLM сам повторит запрос при сетевой ошибке или 5xx ДО начала ответа
+    # (DeepSeek иногда рвёт соединение). Обрыв ПОСРЕДИ потока так не лечится — его
+    # обрабатывает веб-слой (web/stream.py): понятное сообщение и кнопка «повторить».
+    # timeout — сколько секунд ждать ответа, прежде чем считать запрос зависшим.
+    return LiteLlm(model=settings.llm_model, api_key=settings.deepseek_api_key,
+                   num_retries=2, timeout=90)
 
 
 def build_agent(settings: Settings | None = None) -> LlmAgent:
@@ -113,4 +119,7 @@ def build_agent(settings: Settings | None = None) -> LlmAgent:
         model=build_model(settings),
         instruction=build_instruction,  # функция: ADK вызовет её перед каждым запросом к модели
         tools=TOOLS,                    # обычные async-функции; ADK обернёт их в FunctionTool
+        # Колбэки перед каждым запросом к модели, по порядку: гардрейл (может ответить
+        # сам, и тогда модель не зовётся), затем обрезка старой истории (agent/callbacks.py).
+        before_model_callback=[guardrail, trim_history],
     )

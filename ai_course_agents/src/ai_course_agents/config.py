@@ -64,6 +64,7 @@ class Settings:
     # ── Веб ────────────────────────────────────────────────────────────────
     jwt_secret: str       # секрет, которым подписываются токены входа (этап 3)
     jwt_ttl_hours: int    # сколько часов живёт токен входа; по умолчанию неделя
+    cookie_secure: bool   # cookie с токеном только по HTTPS; локально (http://localhost) — False
     host: str             # на каком адресе слушает веб-сервер (127.0.0.1 — только эта машина)
     port: int             # порт веб-сервера
 
@@ -149,6 +150,8 @@ def get_settings() -> Settings:
         data_dir=data_dir,
         jwt_secret=_jwt_secret(data_dir),
         jwt_ttl_hours=int(os.getenv("JWT_TTL_HOURS", "168")),      # 168 ч = 7 дней
+        # строка из .env → bool: «1», «true», «yes» считаем включённым
+        cookie_secure=os.getenv("COOKIE_SECURE", "false").lower() in ("1", "true", "yes"),
         host=os.getenv("HOST", "127.0.0.1"),
         port=int(os.getenv("PORT", "8000")),
     )
