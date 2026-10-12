@@ -15,37 +15,45 @@
     каждый токен результата модель перечитывает на всех следующих шагах;
   • найденные места запоминаются в состоянии сессии (state["last_places"]) — на них
     опираются уточнения «а какой из них ближе?», даже когда старая история обрезана.
+
+Поток данных при вызове инструмента:
+  модель пишет {"name": "search_places", "args": {...}} → ADK валидирует args по схеме,
+  вызывает нашу async-функцию → наш dict уходит модели как function_response →
+  модель читает его на следующем шаге и решает: звать ещё инструмент или отвечать.
 """
 
 from __future__ import annotations
 
-import functools
-import logging
+import functools                     # functools.wraps — сохранить имя/докстроку при обёртке
+import logging                       # журнал ошибок для разработчика (модель его не видит)
 from typing import Any, Awaitable, Callable, Optional
 
-from google.adk.tools import ToolContext
+from google.adk.tools import ToolContext   # «контекст вызова»: доступ к состоянию сессии и др.
 
 from ai_course_agents.config import get_settings
 from ai_course_agents.poi.kinds import KIND_LABELS, KindName
 from ai_course_agents.poi.repo import PoiRepo, distance_m
 
-log = logging.getLogger(__name__)
+log = logging.getLogger(__name__)    # логгер с именем модуля: ai_course_agents.agent.tools
 
 MAX_LIMIT = 20          # больше 20 строк модели не нужно: она их всё равно не перечислит
-LAST_PLACES_KEY = "last_places"
+LAST_PLACES_KEY = "last_places"      # ключ в state сессии; его же читает agent.py
 
+# Один репозиторий на весь процесс. Начинается с None и создаётся при первом обращении
+# (лениво): так импорт модуля не требует, чтобы база уже существовала, — удобно для тестов.
 _repo: PoiRepo | None = None
 
 
 def get_repo() -> PoiRepo:
     """Репозиторий создаётся лениво, один на процесс. Тесты могут подменить его set_repo()."""
-    global _repo
+    global _repo                         # global — меняем переменную модуля, а не создаём локальную
     if _repo is None:
         _repo = PoiRepo(get_settings().poi_db)
     return _repo
 
 
 def set_repo(repo: PoiRepo) -> None:
+    """Подменить репозиторий (например, на тестовую базу)."""
     global _repo
     _repo = repo
 
@@ -55,56 +63,77 @@ def set_repo(repo: PoiRepo) -> None:
 def observed_errors(func: Callable[..., Awaitable[dict]]) -> Callable[..., Awaitable[dict]]:
     """Превращает исключение инструмента в наблюдение {"error": ...} вместо падения прогона.
 
+    Без этого исключение в инструменте (кривой аргумент, сбой базы) пробросилось бы
+    через ADK и оборвало весь ответ пользователю. С ним модель получает текст ошибки
+    как обычный результат и может исправить аргументы и попробовать снова.
+
     functools.wraps копирует имя, докстроку и __wrapped__: по ним ADK строит схему,
     поэтому обёрнутая функция выглядит для модели точно так же, как исходная.
     """
     @functools.wraps(func)
-    async def wrapper(*args: Any, **kwargs: Any) -> dict:
+    async def wrapper(*args: Any, **kwargs: Any) -> dict:   # принимает любые аргументы и передаёт дальше
         try:
-            return await func(*args, **kwargs)
+            return await func(*args, **kwargs)                # обычный путь: результат инструмента
         except Exception as exc:  # noqa: BLE001 — нарочно ловим всё: это граница с моделью
-            log.exception("инструмент %s упал", func.__name__)
+            log.exception("инструмент %s упал", func.__name__)    # полный traceback — в журнал разработчику
+            # Модели — короткое объяснение и подсказка, что делать дальше.
             return {"error": f"{type(exc).__name__}: {exc}. Проверь аргументы и попробуй иначе."}
     return wrapper
 
 
 def _check_kind(kind: str) -> dict | None:
-    """Схема уже ограничивает kind перечнем, но модель может её нарушить — проверяем сами."""
+    """Схема уже ограничивает kind перечнем, но модель может её нарушить — проверяем сами.
+
+    Возвращает dict с ошибкой (его инструмент сразу отдаёт модели) или None, если всё в порядке.
+    """
     if kind not in KIND_LABELS:
+        # В тексте ошибки — список допустимых значений: модели есть из чего выбрать при повторе.
         return {"error": f"вида «{kind}» нет в базе. Допустимые значения kind: "
                          + ", ".join(KIND_LABELS)}
     return None
 
 
 def _clamp(limit: int) -> int:
+    """Зажать limit в диапазон 1..MAX_LIMIT: модель может попросить и 0, и 1000."""
     return max(1, min(int(limit), MAX_LIMIT))
 
 
 def _place(row: dict[str, Any]) -> dict[str, Any]:
     """Компактная запись места для модели: только непустые поля, координаты до 5 знаков (~1 м)."""
+    # «Белорусская улица, 44» из двух полей; пропускаем пустые, чтобы не было «, 44» или «улица, ».
     address = ", ".join(x for x in (row.get("street"), row.get("housenumber")) if x)
     item = {
-        "id": row["id"],
-        "name": row.get("name") or "без названия",
-        "kind": KIND_LABELS.get(row.get("kind", ""), row.get("kind")),
+        "id": row["id"],                                          # нужен для place_details / rank_by_distance
+        "name": row.get("name") or "без названия",                # у ~25% мест названия нет
+        "kind": KIND_LABELS.get(row.get("kind", ""), row.get("kind")),   # вид по-русски, понятнее модели
         "address": address or None,
-        "hours": row.get("opening_hours"),
+        "hours": row.get("opening_hours"),                        # строка OSM: «Mo-Fr 09:00-21:00»
         "cuisine": row.get("cuisine"),
-        "distance_m": row.get("distance_m"),
-        "lat": round(row["lat"], 5),
-        "lon": round(row["lon"], 5),
+        "distance_m": row.get("distance_m"),                      # есть только у nearest / rank_by_distance
+        "lat": round(row["lat"], 5),                              # 5 знаков ≈ 1 м: точнее не нужно,
+        "lon": round(row["lon"], 5),                              # а лишние цифры — лишние токены
     }
+    # Выбрасываем поля со значением None: «нет данных» модель поймёт и по отсутствию поля,
+    # а каждое "hours": null — это несколько токенов на каждое место.
     return {k: v for k, v in item.items() if v is not None}
 
 
 def _remember(tool_context: ToolContext | None, places: list[dict[str, Any]]) -> None:
     """Кладёт найденные места в состояние сессии. ADK сохранит его вместе с историей."""
     if tool_context is not None and places:
+        # tool_context.state — словарь состояния сессии. Запись в него ADK превращает
+        # в state_delta события и сохраняет в сервисе сессий; agent.py читает этот ключ
+        # и показывает список модели в инструкции на следующих шагах и вопросах.
+        # Храним минимум: id, название и координаты — этого хватает для уточнений.
         tool_context.state[LAST_PLACES_KEY] = [
             {"id": p["id"], "name": p["name"], "lat": p["lat"], "lon": p["lon"]} for p in places]
 
 
 # ── инструменты ─────────────────────────────────────────────────────────────
+# Каждая функция ниже — отдельный инструмент. Порядок декораторов: @observed_errors
+# оборачивает функцию, а ADK получает уже обёрнутую (через список TOOLS в конце файла).
+# Аргументы со значением по умолчанию модель может не передавать; Optional[...] = None
+# в схеме превращается в «строка или null».
 
 @observed_errors
 async def search_places(kind: KindName, street: Optional[str] = None,
@@ -133,12 +162,12 @@ async def search_places(kind: KindName, street: Optional[str] = None,
         only_24_7: True только если спрашивают про круглосуточные места.
         limit: сколько мест вернуть, 1–20, по умолчанию 10.
     """
-    if err := _check_kind(kind):
+    if err := _check_kind(kind):                 # неверный вид → сразу ошибка-наблюдение
         return err
     total, rows = await get_repo().search(kind=kind, street=street, brand=brand, cuisine=cuisine,
                                           name=name, only_24_7=only_24_7, limit=_clamp(limit))
-    places = [_place(r) for r in rows]
-    _remember(tool_context, places)
+    places = [_place(r) for r in rows]           # строки базы → компактные записи для модели
+    _remember(tool_context, places)              # запомнить для уточнений «а какой из них…»
     return {"found_total": total, "shown": len(places), "places": places}
 
 
@@ -160,6 +189,7 @@ async def count_places(kind: KindName, street: Optional[str] = None,
     if err := _check_kind(kind):
         return err
     n = await get_repo().count(kind=kind, street=street, only_24_7=only_24_7)
+    # Вид по-русски рядом с числом: модели проще сформулировать ответ, не переводя сама.
     return {"kind": KIND_LABELS[kind], "count": n}
 
 
@@ -203,7 +233,10 @@ async def geocode_address(street: str, housenumber: Optional[str] = None) -> dic
     """
     point = await get_repo().geocode(street, housenumber)
     if point is None:
+        # Не исключение, а подсказка модели: что случилось и что делать дальше.
         return {"error": f"улица «{street}» в базе не найдена. Уточни название у пользователя."}
+    # 6 знаков (~0.1 м): модель передаст эти числа в следующий инструмент дословно,
+    # а 15 знаков после запятой от AVG() — это лишние токены и шанс ошибиться при копировании.
     point["lat"], point["lon"] = round(point["lat"], 6), round(point["lon"], 6)
     return point
 
@@ -254,10 +287,11 @@ async def rank_by_distance(lat: float, lon: float, place_ids: list[int],
         lon: долгота точки отсчёта.
         place_ids: id мест из прошлых результатов, например [811, 731].
     """
+    # int(i) — модель иногда присылает id строками ("811"); [:MAX_LIMIT] — не больше 20 мест.
     rows = await get_repo().by_ids([int(i) for i in place_ids][:MAX_LIMIT])
     for r in rows:
-        r["distance_m"] = distance_m(lat, lon, r["lat"], r["lon"])
-    places = [_place(r) for r in sorted(rows, key=lambda r: r["distance_m"])]
+        r["distance_m"] = distance_m(lat, lon, r["lat"], r["lon"])   # расстояние до каждого
+    places = [_place(r) for r in sorted(rows, key=lambda r: r["distance_m"])]   # от ближнего к дальнему
     _remember(tool_context, places)
     return {"places": places}
 
@@ -280,17 +314,22 @@ async def place_details(place_id: int) -> dict:
     row = await get_repo().details(int(place_id))
     if row is None:
         return {"error": f"места с id={place_id} нет в базе"}
-    card = _place(row)
+    card = _place(row)            # базовые поля — как в списках
+    # Флаги из базы хранятся как 1 / 0 / NULL. Переводим 1/0 в true/false, а NULL
+    # (нет данных) просто не включаем — так модель не примет «нет данных» за «нет».
+    # Пары: (колонка в базе, понятное модели имя поля).
     for field, key in (("is_24_7", "24/7"), ("internet", "wifi"), ("wheelchair", "wheelchair"),
                        ("outdoor_seating", "outdoor_seating"), ("takeaway", "takeaway")):
         if row.get(field) is not None:
             card[key] = bool(row[field])
+    # Текстовые поля карточки — только если заполнены.
     for field in ("brand", "phone", "website"):
         if row.get(field):
             card[field] = row[field]
     return card
 
 
-# Набор инструментов агента. semantic_search добавится на этапе 2.
+# Набор инструментов агента: его передаёт в LlmAgent(tools=...) файл agent.py.
+# ADK обернёт каждую функцию в FunctionTool. semantic_search добавится на этапе 2.
 TOOLS = [search_places, count_places, top_brands, geocode_address,
          nearest_places, rank_by_distance, place_details]

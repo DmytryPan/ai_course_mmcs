@@ -15,8 +15,12 @@ kind в базе — латинское значение тега OpenStreetMap 
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal   # Literal["a", "b"] — тип «одно из этих значений»
 
+# Ключ — значение поля kind в базе (то, что модель передаёт в инструменты),
+# значение — русское название (то, как пишет пользователь). Порядок ключей важен:
+# в таком же порядке виды стоят в шпаргалке инструкции и в enum схемы инструментов.
+# Через запятую — синонимы: модели проще сопоставить «шаурма» → fast_food.
 KIND_LABELS: dict[str, str] = {
     # еда и напитки
     "restaurant": "ресторан",
@@ -112,12 +116,18 @@ KIND_LABELS: dict[str, str] = {
 
 # Literal[...] из ключей словаря. Literal.__getitem__ принимает кортеж — так перечень
 # строится один раз из словаря и не расходится с ним при правках.
+# tuple(KIND_LABELS) — кортеж ключей словаря ("restaurant", "cafe", ...).
+# Literal[кортеж] эквивалентен Literal["restaurant", "cafe", ...], написанному руками.
+# Аннотация `kind: KindName` в инструменте → в JSON Schema {"enum": [...82 значения]}.
+# type: ignore — статические анализаторы не любят Literal из вычисленного значения,
+# но во время выполнения это обычный корректный тип.
 KindName = Literal[tuple(KIND_LABELS)]  # type: ignore[valid-type]
 
-# Виды общепита: ими ограничивается семантический поиск «где поесть».
+# Виды общепита: ими ограничивается семантический поиск «где поесть» (этап 2).
 FOOD_KINDS = ("restaurant", "cafe", "fast_food", "bar", "pub", "bakery", "confectionery")
 
 
 def kinds_cheatsheet() -> str:
     """Компактная шпаргалка «kind — по-русски» для инструкции агента (одна строка на вид)."""
+    # «pharmacy — аптека\ncafe — кафе, кофейня\n…» — по строке на вид
     return "\n".join(f"{kind} — {label}" for kind, label in KIND_LABELS.items())
